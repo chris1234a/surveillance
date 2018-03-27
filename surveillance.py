@@ -12,6 +12,7 @@ from time import sleep, time
 import datetime
 
 # For emails
+from getpass import getpass
 import smtplib
 from email.MIMEMultipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -20,21 +21,29 @@ from email.MIMEBase import MIMEBase
 from email import encoders
 
 # Globals
+prt=1
 tol = 150.0 # max MSE before we declare scene has changed
-camera = cv2.VideoCapture(0) # opencv webcam object
+camera = cv2.VideoCapture(prt) # opencv webcam object
 height = 480 # height of image
 width = 640 # width of image
 hxw = float(height*width) 
 
+# fromAddr='mower.chris@gmail.com'
+# toAddr='mower.chris@gmail.com'
 fromAddr='mower.chris@gmail.com'
-toAddr='mower.chris@gmail.com'
+toAddr='stoutheo@gmail.com' # email here
+
 
 server = smtplib.SMTP('smtp.gmail.com', 587) # creates a connection to gmail
 server.starttls()
     
 def getImage():
     # Return image
-    retval, img = camera.read()
+    retval, img_bgr = camera.read()
+    img={}
+    img['time']=time()
+    img['bgr']=img_bgr
+    img['gray']=cv2.cvtColor(img_bgr,cv2.COLOR_BGR2GRAY)
     return img
 
 def areNotTheSame(img1, img2):
@@ -42,6 +51,11 @@ def areNotTheSame(img1, img2):
     mse = np.sum((img1.astype('float')-img2.astype('float'))**2)/hxw
     print 'time: ', datetime.datetime.now(), ', mse =', mse
     return mse > tol
+
+def saveImage(img):
+    filename='img-{}.png'.format(img['time'])
+    print ">>>Saving image: {}<<<".format(filename)
+    cv2.imwrite(filename, img['bgr'])
     
 def emailImage(img):
     # Emails me the picture
@@ -50,13 +64,11 @@ def emailImage(img):
     msg=MIMEMultipart()
     msg['From'] = fromAddr
     msg['To'] = toAddr
-    msg['Subject'] = 'Someone in room'
+    msg['Subject'] = '>>>DISTURBANCE DETECTED<<<'
 
     # image -> attachment
-    now = time()
-    print 'Scene significantly changed at', now
-    filename='img_' + str(now) + '.png'
-    cv2.imwrite(filename, img)
+    print 'Scene significantly changed at', img['time']
+    saveImage(img)
     attachment = open(filename, 'rb')
 
     # Add attachment
@@ -68,37 +80,30 @@ def emailImage(img):
 
 def main():
 
-    # Login to gmail
-    print 'Password please'
-    password = raw_input(':: ')
-
-    print 'Logging in...',
-    server.login(fromAddr, password)
-    print 'complete!'
+    # # Login to gmail
+    # password=getpass('Password: ')
+    
+    # print 'Logging in...',
+    # server.login(fromAddr, password)
+    # print 'complete!'
 
     # Wait then start
     print 'Waiting ..'
     sleep(10)
     print 'Starting'
     
-    c_old = getImage()
+    img_old = getImage()
 
     try:
         while True:
-            c_new = getImage()
+            img_new = getImage()
         
-            # convert to gray
-            g_old = cv2.cvtColor(c_old,cv2.COLOR_BGR2GRAY)
-            g_new = cv2.cvtColor(c_new,cv2.COLOR_BGR2GRAY)
-
             # Compare old and new images
-            if areNotTheSame(g_old, g_new):
+            if areNotTheSame(img_old['gray'], img_new['gray']):
                 # images are significantly different -> email
-                emailImage(c_new)
-            
-            g_old = g_new
-            c_old = c_new
-
+                #emailImage(img_new)
+                saveImage(img_new)
+            img_old=img_new
             sleep(1)
     except KeyboardInterrupt:
         print 'Quiting...'
