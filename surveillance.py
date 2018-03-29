@@ -1,113 +1,152 @@
 """ Copyright Christopher E. Mower 2017
 
 Takes continuous picutures, compares them, and if a signigicant change has 
-taken place emails you the picture.
+taken place saves image.
 """
-# For images
+import os
 import cv2
 import numpy as np
-
-# For alerts
 from time import sleep, time
 import datetime
+from copy import deepcopy
 
-# For emails
-from getpass import getpass
-import smtplib
-from email.MIMEMultipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-from email.MIMEText import MIMEText
-from email.MIMEBase import MIMEBase
-from email import encoders
+dr='/home/chris/My-Projects/surveillance'
 
-# Globals
-prt=1
-tol = 150.0 # max MSE before we declare scene has changed
-camera = cv2.VideoCapture(prt) # opencv webcam object
-height = 480 # height of image
-width = 640 # width of image
-hxw = float(height*width) 
+def date():
+    return datetime.datetime.now()
 
-# fromAddr='mower.chris@gmail.com'
-# toAddr='mower.chris@gmail.com'
-fromAddr='mower.chris@gmail.com'
-toAddr='stoutheo@gmail.com' # email here
-
-
-server = smtplib.SMTP('smtp.gmail.com', 587) # creates a connection to gmail
-server.starttls()
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
     
-def getImage():
-    # Return image
-    retval, img_bgr = camera.read()
-    img={}
-    img['time']=time()
-    img['bgr']=img_bgr
-    img['gray']=cv2.cvtColor(img_bgr,cv2.COLOR_BGR2GRAY)
-    return img
+class OutputProcessor(object):
 
-def areNotTheSame(img1, img2):
-    # Computes the Mean-Squared Error to check if images are similar
-    mse = np.sum((img1.astype('float')-img2.astype('float'))**2)/hxw
-    print 'time: ', datetime.datetime.now(), ', mse =', mse
-    return mse > tol
+    def __init__(self, fn='history.out', print_to_screen=True):
+        self.print_to_screen=print_to_screen
+        self.fn=fn
+        self.f=open(fn, 'w')
+        output="[OK, {}] session starting".format(date())
+        self.writeToOutput(output, 'ok')
 
-def saveImage(img):
-    filename='img-{}.png'.format(img['time'])
-    print ">>>Saving image: {}<<<".format(filename)
-    cv2.imwrite(filename, img['bgr'])
-    
-def emailImage(img):
-    # Emails me the picture
+    def close(self):
+        output="[OK, {}] quiting session".format(date())
+        self.writeToOutput(output, 'ok')
+        self.f.close()
 
-    # Gen msg
-    msg=MIMEMultipart()
-    msg['From'] = fromAddr
-    msg['To'] = toAddr
-    msg['Subject'] = '>>>DISTURBANCE DETECTED<<<'
+    def sleep(self, t):
+        output="[SLEEP, {}] sleeping for {} secs".format(date(),t)
+        self.writeToOutput(output, 'sleep')
+        sleep(t)
 
-    # image -> attachment
-    print 'Scene significantly changed at', img['time']
-    saveImage(img)
-    attachment = open(filename, 'rb')
+    def userExit(self):
+        output="[OK, {}] user request exit".format(date())
+        self.writeToOutput(output, 'ok')
 
-    # Add attachment
-    part=MIMEApplication(attachment.read(),Name=filename)
-    part['Content-Disposition'] = 'attachment; filename="%s"' % filename
-    msg.attach(part)
-    
-    server.sendmail(fromAddr, toAddr, msg.as_string())
+    def writeToOutput(self,txt, typ):
+        if self.print_to_screen:
+            if typ=='warn':
+                print bcolors.WARNING+txt+bcolors.ENDC
+            elif typ=='disturb':
+                print bcolors.FAIL+txt+bcolors.ENDC
+            elif typ=='sleep':
+                print bcolors.OKBLUE+txt+bcolors.ENDC
+            elif typ=='ok':
+                print bcolors.OKGREEN+txt+bcolors.ENDC
+            elif typ=='err':
+                print bcolors.FAIL+txt+bcolors.ENDC
+        self.f.write(txt+'\n')
+
+    def checkDirSize(self):
+        total=0.0
+        for f in os.listdir(dr):
+            if f[-3:]=='png':
+                total+=os.path.getsize(f)
+        total=1e-9*total # byte->gb
+        if total > 75.0:
+            output="[WARN, {}] not enough storage space".format(date())
+            self.writeToOutput(output, 'warn')
+            return True
+        else:
+            return False
+                
+    def warnOfDisturbance(self, date, mse):
+        output='>>>WARNING DISTURBANCE DETECTED<<< capture time: {}, mse: {}'.format(date, mse)
+        self.writeToOutput(output, 'disturb')
+            
+class ImageProcessor(object):
+    def __init__(self, prt, tol):
+        self.w=640 # image width
+        self.h=480 # image height
+        self.camera=cv2.VideoCapture(prt)
+        self.date=None
+        self.img_old={'stamp': None, 'gray': None, 'bgr': None}
+        self.img_new={'stamp': None, 'gray': None, 'bgr': None}
+        self.tol=tol
+        self.mse=-1.0
+
+    def close(self):
+        self.camera.release()
+
+    def update(self):
+        self.img_old=deepcopy(self.img_new)
+        retval, im = self.camera.read()
+        t=time()
+        self.date=date()
+        if retval is True:
+            output="[OK, {}] image captured successfully".format(self.date)
+            self.img_new['stamp']=t
+            self.img_new['date']=self.date
+            self.img_new['bgr']=im
+            self.img_new['gray']=cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
+            typ='ok'
+        else:
+            output="[ERROR, {}] image could not be retrieved from camera".format(self.date)
+            typ='err'
+        return output, typ
+
+    def save(self):
+        filename='img-{}.png'.format(self.img_new['stamp'])
+        cv2.imwrite(filename,self.img_new['bgr'])
+        
+    def cmp(self):
+        if self.img_old['gray'] is None or self.img_new['gray'] is None:
+            return False
+        im_old=self.img_old['gray'].astype('float')
+        im_new=self.img_new['gray'].astype('float')
+        self.mse = np.sum((im_old-im_new)**2)/float(self.w*self.h)
+        return self.mse>self.tol
 
 def main():
 
-    # # Login to gmail
-    # password=getpass('Password: ')
+    sleep_time = 1
+    rate=2 # Hz
+    prt=0
+    tol = 130.0 # max MSE before we declare scene has changed
+    impro=ImageProcessor(prt, tol)
+    oupro=OutputProcessor()
+    oupro.sleep(sleep_time)
     
-    # print 'Logging in...',
-    # server.login(fromAddr, password)
-    # print 'complete!'
-
-    # Wait then start
-    print 'Waiting ..'
-    sleep(10)
-    print 'Starting'
-    
-    img_old = getImage()
-
     try:
         while True:
-            img_new = getImage()
-        
-            # Compare old and new images
-            if areNotTheSame(img_old['gray'], img_new['gray']):
-                # images are significantly different -> email
-                #emailImage(img_new)
-                saveImage(img_new)
-            img_old=img_new
-            sleep(1)
+            output, typ=impro.update()
+            oupro.writeToOutput(output, typ)
+            if impro.cmp():
+                oupro.warnOfDisturbance(impro.date,impro.mse)
+                impro.save()
+            if oupro.checkDirSize():
+                break
+            sleep(1.0/rate)
     except KeyboardInterrupt:
-        print 'Quiting...'
-        server.quit()
-
+        oupro.userExit()
+    finally:
+        impro.close()
+        oupro.close()
+        
 if __name__=='__main__':
     main()
