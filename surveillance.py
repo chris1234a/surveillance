@@ -113,7 +113,7 @@ class ImageProcessor(object):
         return output, typ
 
     def save(self):
-        filename='img-{}.png'.format(self.img_new['stamp'])
+        filename='img-{}.png'.format(self.img_new['date'])
         cv2.imwrite(filename,self.img_new['bgr'])
         
     def cmp(self):
