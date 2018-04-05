@@ -4,6 +4,7 @@
 Takes continuous picutures, compares them, and if a signigicant change has 
 taken place saves image.
 """
+from playsound import playsound
 import os
 from sys import argv
 import cv2
@@ -13,6 +14,9 @@ import datetime
 from copy import deepcopy
 
 dr='/home/chris/My-Projects/surveillance'
+
+def play_police():
+    playsound(dr+'/sound.ogg')
 
 def date():
     return datetime.datetime.now()
@@ -144,12 +148,16 @@ def main():
     oupro.sleep(sleep_time)
     
     try:
+        nbad=0
         while True:
             output, typ=impro.update()
             oupro.writeToOutput(output, typ)
             if impro.cmp():
+                nbad+=1
                 oupro.warnOfDisturbance(impro.date,impro.mse)
                 impro.save()
+                if nbad ==10:
+                    play_police()
             if oupro.checkDirSize():
                 break
             sleep(1.0/rate)
