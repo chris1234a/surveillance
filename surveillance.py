@@ -138,8 +138,8 @@ def main():
 	sleep_time=int(argv[1])
 	rate=int(argv[2])
     else:
-        sleep_time = 1800
-	rate=4
+        sleep_time = 2
+	rate=20
         
     prt=0
     tol = 130.0 # max MSE before we declare scene has changed
@@ -156,8 +156,9 @@ def main():
                 nbad+=1
                 oupro.warnOfDisturbance(impro.date,impro.mse)
                 impro.save()
-                if nbad ==10:
+                if nbad == 30:
                     play_police()
+                    nbad=0
             if oupro.checkDirSize():
                 break
             sleep(1.0/rate)
