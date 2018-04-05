@@ -129,12 +129,14 @@ def main():
     if len(argv)==2:
         sleep_time=int(argv[1])
 	rate=4
-    if len(argv)==3:
+        print "here"
+    elif len(argv)==3:
 	sleep_time=int(argv[1])
 	rate=int(argv[2])
     else:
         sleep_time = 1800
 	rate=4
+        
     prt=0
     tol = 130.0 # max MSE before we declare scene has changed
     impro=ImageProcessor(prt, tol)
