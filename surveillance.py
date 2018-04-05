@@ -1,9 +1,11 @@
+#!/usr/bin/env python
 """ Copyright Christopher E. Mower 2017
 
 Takes continuous picutures, compares them, and if a signigicant change has 
 taken place saves image.
 """
 import os
+from sys import argv
 import cv2
 import numpy as np
 from time import sleep, time
