@@ -5,6 +5,7 @@ Takes continuous picutures, compares them, and if a signigicant change has
 taken place saves image.
 """
 from playsound import playsound
+from multiprocessing import Process
 import os
 from sys import argv
 import cv2
@@ -16,7 +17,10 @@ from copy import deepcopy
 dr='/home/chris/My-Projects/surveillance'
 
 def play_police():
+    global sound_playing
+    sound_playing=True
     playsound(dr+'/sound.ogg')
+    sound_playing=False
 
 def date():
     return datetime.datetime.now()
@@ -130,6 +134,8 @@ class ImageProcessor(object):
 
 def main():
 
+    global sound_playing
+
     if len(argv)==2:
         sleep_time=int(argv[1])
 	rate=4
@@ -146,6 +152,7 @@ def main():
     impro=ImageProcessor(prt, tol)
     oupro=OutputProcessor()
     oupro.sleep(sleep_time)
+    sound_playing=False
     
     try:
         nbad=0
@@ -156,8 +163,11 @@ def main():
                 nbad+=1
                 oupro.warnOfDisturbance(impro.date,impro.mse)
                 impro.save()
-                if nbad == 30:
-                    play_police()
+                if nbad == 30:                    
+                    if not sound_playing:
+                        #p = Process(target=play_police)
+                        #p.start()
+                        pass
                     nbad=0
             if oupro.checkDirSize():
                 break
