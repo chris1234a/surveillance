@@ -104,6 +104,6 @@ venv.bak/
 .mypy_cache/
 
 # For surveillance.py
-/backup*
+backup-*
 img*
 history.out
