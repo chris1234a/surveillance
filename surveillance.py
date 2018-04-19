@@ -85,8 +85,8 @@ class OutputProcessor(object):
         else:
             return False
                 
-    def warnOfDisturbance(self, date, mse):
-        output='>>>WARNING DISTURBANCE DETECTED<<< capture time: {}, mse: {}'.format(date, mse)
+    def warnOfDisturbance(self, date, mse, filename):
+        output='>>>WARNING DISTURBANCE DETECTED<<< capture time: {}, mse: {}, filename: {}'.format(date, mse, filename)
         self.writeToOutput(output, 'disturb')
             
 class ImageProcessor(object):
@@ -121,8 +121,9 @@ class ImageProcessor(object):
         return output, typ
 
     def save(self):
-        filename='img-{}.png'.format(self.img_new['date'])
+        filename='img-{}-{}.png'.format(self.img_new['date'],self.img_new['stamp'])
         cv2.imwrite(filename,self.img_new['bgr'])
+        return filename
         
     def cmp(self):
         if self.img_old['gray'] is None or self.img_new['gray'] is None:
@@ -161,8 +162,8 @@ def main():
             oupro.writeToOutput(output, typ)
             if impro.cmp():
                 nbad+=1
-                oupro.warnOfDisturbance(impro.date,impro.mse)
-                impro.save()
+                filename=impro.save()
+                oupro.warnOfDisturbance(impro.date,impro.mse,filename)
                 if nbad == 30:                    
                     if not sound_playing:
                         #p = Process(target=play_police)
